@@ -1,0 +1,51 @@
+{
+  "name": "artcraft-automation",
+  "version": "2.0.0",
+  "description": "Third-party agent skill for the ArtCraft family of apps (LightCraft RAW developer, FilmCraft video editor, PhotoCraft image editor) — drives them through their command-line tools, JSON-lines control channels and MCP servers. Not the official ArtCraft repository.",
+  "author": {
+    "name": "miaoer"
+  },
+  "agents": ["./agents/artcraft-automation.md"],
+  "skills": ["./skills/artcraft-cli"],
+
+  "expertType": "agent",
+  "agentName": "artcraft-automation",
+
+  "displayName": {
+    "en": "ArtCraft Automation",
+    "zh": "ArtCraft 自动化"
+  },
+  "profession": {
+    "en": "Creative Software Automation",
+    "zh": "创意软件自动化工程"
+  },
+  "displayDescription": {
+    "en": "Drives the ArtCraft suite (LightCraft / FilmCraft / PhotoCraft) via CLI, JSON control channel and MCP server. A third-party agent skill — not the official ArtCraft repository.",
+    "zh": "用 CLI、控制通道与 MCP 驱动 ArtCraft 套件，RAW 修图、视频剪辑、图像编辑都能 AI 代办。面向 ArtCraft 系列软件的第三方 agent skill，非 ArtCraft 官方仓库。"
+  },
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "先跑环境自检，然后帮我把 ~/Pictures/trip 里的 RAW 照片批量调色并导出 JPG",
+    "en": "Run the environment check first, then batch-grade the RAW photos in ~/Pictures/trip and export JPGs."
+  },
+  "plugin": "artcraft-automation",
+  "tags": [
+    { "en": "CLI Automation", "zh": "CLI 自动化" },
+    { "en": "Control Channel", "zh": "控制通道" },
+    { "en": "MCP Server", "zh": "MCP 服务器" }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "先跑环境自检，再帮我把 ~/Pictures/trip 里的 RAW 照片批量调色并导出 JPG",
+      "en": "Run the environment check first, then batch-grade the RAW photos in ~/Pictures/trip and export JPGs."
+    },
+    {
+      "zh": "驱动我正在用的 FilmCraft，通过控制通道截个图看看当前时间线状态",
+      "en": "Drive the FilmCraft I'm using right now — take a screenshot over the control channel to check the current timeline state."
+    },
+    {
+      "zh": "把 PhotoCraft 通过 MCP 接进 Claude，之后我可以用自然语言修图",
+      "en": "Wire PhotoCraft into Claude over MCP so I can retouch images with natural language from now on."
+    }
+  ]
+}
