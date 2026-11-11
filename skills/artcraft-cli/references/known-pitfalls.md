@@ -1,5 +1,6 @@
 # 已知坑位与排障
 
+> 快照日期：2026-11-11（与其余 references 同步）。
 > 收录的是**实测踩过**的坑，不含纯推测。每条都标了适用应用和出现条件。
 > 遇到新坑补在这里，并注明验证方式。
 
@@ -119,6 +120,19 @@ ArtCraft 应用在仓库 `main` 上持续开发，文档经常**领先于已发�
 
 - 处理：文档用来**理解设计**（知道将来会变），行为用**实测**确认（`craft_ctl.py` 直连、`<cli> --help`、通道 `methods`）。两者冲突时，以你机器上的实际表现为准，并回头更新本表。
 
+## 上游文档新增坑位（2026-11-11 同步，标注来源为上游文档，尚未本机实测）
+
+| 现象 | 原因（上游文档） | 处理 |
+|---|---|---|
+| `photocraft-cli mcp --bridge` 报用法错误 exit 2 | root flag 配在了 CLI 侧；bridge 不能授予 root | 把 `--automation-read-root` / `--automation-write-root` 配到桌面应用进程 |
+| PhotoCraft MCP 启动即失败 | 重复 `--automation-write-root`，或某个 root 不是已存在目录 | write root 只给一次；所有 root 用已存在的绝对目录 |
+| 同一连接再发 `auth` 回 `already authenticated` | 每连接只认证一次 | 新开连接重新认证；这个错误不会关闭连接 |
+| 老版本 PhotoCraft 被 bridge 拒绝 | bridge 改用 `auth.challenge`，旧应用不支持 | CLI 与应用一起升级；脚本侧仍可用 `frame` 的 token 首帧 |
+| MCP 客户端连不上 `localhost:7878` | bridge 只认字面量 `127.0.0.1` / `[::1]`，不做 DNS | 配置里写 `127.0.0.1:7878` |
+| `engine.commands` 解析后拿不到 `commands` 字段 | 返回的是裸 JSON 数组，没有包装对象 | 直接遍历 `result` 数组 |
+| `effects.setParam` 回 `keyframes: 0` 以为失败 | `keyframes:0` 是成功的静态编辑 | 看 `param` / `value`，不要按 keyframe 数量判成败 |
+| bridge 长任务在 55s 报错，服务端却说 60s | 客户端超时故意设得比服务端短 | waited `command_run` 的引擎命令走 `wait:false` + 轮询，不受此限 |
+
 ## 排障速查表
 
 | 症状 | 原因 | 处理 |
@@ -128,7 +142,8 @@ ArtCraft 应用在仓库 `main` 上持续开发，文档经常**领先于已发�
 | `unknown method` | 方法名拼错或跨应用套用 | 先查注册表：`engine.commands` / `methods` / `<cli> commands` |
 | `unknown command` | 命令 id 不存在或已改名 | 同上，按 label/menu 找 |
 | 请求超时 | 窗口不在绘制帧；或命令真的很久 | 置前窗口或改 headless；长任务用 `wait:false` 再轮询 |
-| PhotoCraft 回 `authentication required` | 没做 auth 首帧 | `--token-file` |
+| PhotoCraft 回 `authentication required` | 没做 auth 首帧（脚本/`frame` 模式） | `--token-file`；若走 bridge 则确认 CLI 与应用版本匹配 |
+| bridge 报 "the control token was not sent" | 监听方没通过挑战握手（应用过旧或端口被占） | 升级 CLI 与应用，确认监听进程就是 PhotoCraft |
 | `photocraft --help` 开了窗口 | 它不认 `--help` | 用 `strings` 或通道 `methods` |
 | 导出返回非零但文件存在 | 原子保存的改名被系统策略拦截 | 从 `/tmp` 暂存再复制 |
 | 命令执行了但状态没变 | 编辑进了 undo 栈但对象不同 | 重读状态：`photo.inspect` / `sequence.inspect` / `document.inspect` |

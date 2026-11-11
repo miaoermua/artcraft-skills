@@ -1,6 +1,6 @@
 # 控制通道协议参考
 
-> 快照日期：2026-11-04。来源：上游仓库 `storytold/{lightcraft,filmcraft,photocraft}` 的 `docs/control-protocol.md`（main 分支）+ 本机实测。
+> 快照日期：2026-11-11。来源：上游仓库 `storytold/{lightcraft,filmcraft,photocraft}` 的 `docs/control-protocol.md`（main 分支）+ 本机实测。
 > 协议随版本演进。**方法名、参数、认证方式以运行中实例为准**：`engine.commands`（命令）、`methods`（方法）、上游仓库最新文档。刷新方式见 `upstream-sources.md`。
 
 ## 通用机制（三家一致的部分）
@@ -15,14 +15,31 @@
 - **无推送**：只有请求-回复，没有事件流。要知道 GUI 侧发生了什么，轮询 inspect 方法对比快照。
 - **快照语义**：每次请求都是独立快照。换了对象（照片 / 序列 / 文档）必须重读状态，不能拿缓存的 id 推断。
 - **空闲断连**：PhotoCraft 应用侧 30s 空闲断连；bridge 客户端会自动重连（纯读工具重试一次，**编辑不自动重发**）。
+- **命令注册表形状**：`engine.commands`（通道与 `serve`）、引擎命令 `command.list`、MCP `command_list` 都回**裸 JSON 数组**（`result:[…]`），没有 `{"commands":[…]}` 包装。每项含 `id` / `label` / `menu` / `shortcut` / `params`（人读文档字符串，非 schema）/ `enabled` / `disabledReason` / `needsDocument`，部分带 `keywords`。桌面通道的 `engine.commands` 不接受 filter，过滤由 MCP 侧完成。
+- **后台作业**：长命令（`filter.*`、Content-Aware、Photomerge、文件打开/置入、交互式保存等）在桌面端跑成后台作业。`engine.execute` / `ui.menu.invoke` / `ui.dialog.confirm` / `app.save` 默认等结果；传 `"wait": false` 立刻拿 `{job, pending:true}`，再轮询 `jobs.list`（`state`: running/done/failed/cancelled、`progress` 0–1、结果或错误）并用 `jobs.cancel {job}` 停止。作业期间编辑同一文档的命令会失败；`ui.inspect` 的 `jobs` 字段列出进行中的作业。已开始替换文件的保存不可取消。
+- **bridge 时限与地址**：客户端调用超时 55s，严格低于服务端 60s 回复上限。waited `command_run` 的引擎命令不受此限——bridge 只发一次 `engine.execute {wait:false}` 再轮询 `jobs.list`。bridge 只接受字面量 `127.0.0.1:<port>` / `[::1]:<port>`；`localhost` 不做 DNS 解析，直接当 `127.0.0.1`。
 
-## 认证三态
+## 认证四态（2026-11-11 上游同步）
 
 | 模式 | 适用 | 机制 | 缺凭据时 |
 |---|---|---|---|
 | `none` | LightCraft | 无 | 照常工作——**任何本机进程都能驱动，用完即关** |
-| `field` | FilmCraft | 每个请求顶层带 `"token": "<64 hex>"` | **取决于版本**：较新版本要求 token，缺失时应用不监听端口；**0.9.0 实测不强制**，无 token 甚至错 token 都照常返回结果 |
-| `frame` | PhotoCraft | 连接首帧 `{"id":"auth","method":"auth","params":{"token":"<64 hex>"}}` | 连接建得上，但请求被回 `{"error":"authentication required","ok":false}` |
+| `field` | FilmCraft | 每个请求顶层带 `"token": "<64 hex>"` | **取决于版本**：上游 `main` 文档要求 token、缺失时不监听端口；**0.9.0 实测不强制**，无 token 甚至错 token 都照常返回结果 |
+| `frame` | PhotoCraft（脚本 / 本 skill 的 `craft_ctl.py`） | 连接首帧 `{"id":"auth","method":"auth","params":{"token":"<64 hex>"}}` | 连接建得上，但请求被回 `{"error":"authentication required","ok":false}` |
+| `challenge` | PhotoCraft 官方 bridge（`photocraft-cli mcp --bridge`） | `auth.challenge` → 校验 `serverProof` → `auth {proof}`，token 从不上线 | 监听方无法证明持有 token 时报 "the control token was not sent"；老版本应用直接被拒 |
+
+> **本 skill 的 `craft_ctl.py` 只实现 `none` / `frame` / `field`**（对应 `--auth-mode` 的取值），挑战握手由官方 bridge 内部完成，脚本侧不用也不该自己实现。上游仍接受 `frame` 的 token 首帧，所以现有脚本继续可用。
+
+挑战握手形状（HMAC-SHA256，密钥为 token 的 64 位小写 hex 的 ASCII，消息为 `<label>\n<clientNonce>\n<serverNonce>`，label 分别是 `photocraft-control-v1 server` / `photocraft-control-v1 client`）：
+
+```json
+{"id":1,"method":"auth.challenge","params":{"clientNonce":"<64 hex>"}}
+{"id":1,"ok":true,"result":{"serverNonce":"<64 hex>","serverProof":"<64 hex>"}}
+{"id":2,"method":"auth","params":{"proof":"<64 hex>"}}
+{"id":2,"ok":true,"result":{"authenticated":true}}
+```
+
+客户端先校验 `serverProof`，不匹配就断开、不发 `auth`；挑战之后同一连接只接受 `auth {proof}`。token 认证会把 token 发给占着端口的进程，只在确认监听方就是应用时使用；官方 bridge 不会回退到它。**每连接只认证一次**，之后再发 `auth` / `auth.challenge` 会得到 `already authenticated`，但连接继续服务。
 
 > **版本漂移警告（2026-11-04 实测）**：上游 `main` 分支文档描述 FilmCraft 强制 token，但已发布的 **0.9.0 二进制并不强制**——无 token 字段、错误 token 都正常返回 `engine.commands` 结果。因此**不要根据文档假设服务端会替你拦**，客户端要自己带上凭据（`craft_ctl.py --app film` 会自动带），也不要因为"文档说缺 token 连不上"就去排查错方向。
 
@@ -34,7 +51,7 @@ filmcraft --control 9876 &
 filmcraft-cli mcp --bridge 127.0.0.1:9876
 ```
 
-凭据不对时：FilmCraft 回一条错误并**在派发任何请求前关闭连接**；PhotoCraft 回 `already authenticated` 或认证失败。
+凭据不对时：FilmCraft 回一条错误并**在派发任何请求前关闭连接**；PhotoCraft 的 `frame` 模式回 `authentication required` 并关闭连接，同一连接重复认证回 `already authenticated`。
 
 安全：bearer token 即全部非文件控制面（UI 输入、命令执行、应用控制）。**不提交、不记录、不在共享系统上命令行直传**（进程列表可见）。协议不加密、仅 loopback——不要 tunnel 到不可信主机。loopback 只挡远程，不挡同机其他进程。
 
@@ -84,7 +101,7 @@ filmcraft-cli mcp --bridge 127.0.0.1:9876
 
 ## FilmCraft（视频剪辑）
 
-**启动**：`filmcraft --control 9876` 或 `FILMCRAFT_CONTROL_PORT=9876`，**且必须提供 `FILMCRAFT_CONTROL_TOKEN`**。
+**启动**：`filmcraft --control 9876` 或 `FILMCRAFT_CONTROL_PORT=9876`。上游 `main` 文档要求同时提供 `FILMCRAFT_CONTROL_TOKEN`（凭据放在每个请求的顶层 `token` 字段），但已发布的 0.9.0 二进制实测并不强制——不带或带错 token 都能正常返回。文档领先于二进制是常态，以运行中实例为准；详见 `known-pitfalls.md`。
 **附加 flag**：`--control-input-only`（组件输入只接受来自控制通道）、`--demo`、`--empty`、`--project p.fcproj`、`--data-dir DIR`（env `FILMCRAFT_DATA_DIR`）、`--graphics default|dx12|software`。
 
 ### 方法

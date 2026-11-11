@@ -1,6 +1,6 @@
 # CLI 参考
 
-> 快照日期：2026-11-04。来源：上游仓库 README 与 `docs/agents.md` / `docs/mcp.md`（main 分支）。
+> 快照日期：2026-11-11。来源：上游仓库 README 与 `docs/agents.md` / `docs/mcp.md`（main 分支）。
 > CLI 子命令随版本增删。**用 `<cli> --help`、`<cli> commands` 复核**，别照抄本表。
 
 ## 获取与安装
@@ -65,7 +65,7 @@ lightcraft-cli snapshot --library DIR --script tour.jsonl -o shot.png
 lightcraft-cli commands [--json]    # 命令注册表
 lightcraft-cli controls [--json]    # develop 滑块 id 与范围
 lightcraft-cli calibrate --max 300 ~/Pictures/2026   # 相机色彩配置
-lightcraft-cli mcp [--connect 127.0.0.1:7980] [LIBRARY_DIR]
+lightcraft-cli mcp [--connect 127.0.0.1:7980] [--library DIR] [--demo] [--compact] [FILES/FOLDERS…]
 ```
 
 - `run` 每命令输出一行 JSON（`{command, ok, result|error, ms}`），失败时退出码非零。
@@ -88,14 +88,18 @@ photocraft-cli batch --actions grade.json --in ./raw --out ./graded
 
 photocraft-cli commands                 # 全部命令 id（--json 出机器格式）
 photocraft-cli commands --filter sharp  # 过滤（注意：不加 --filter 时命令不过滤）
-photocraft-cli mcp                      # MCP 服务器（headless）
-photocraft-cli mcp --bridge 127.0.0.1:7878 --control-token-file /path/token
+photocraft-cli mcp --automation-read-root /work/project --automation-write-root /work/project
+photocraft-cli mcp --automation-read-root /work/project --automation-read-root /library/reference \
+  --automation-write-root /work/project       # read root 可重复，write root 只能一个
+photocraft-cli mcp --bridge 7878 --control-token-file /path/token   # --bridge <port> 是简写
 photocraft-cli droplet                  # macOS droplet 自动化（.command 包装器）
 ```
 
 - 输出格式由 `--out` 扩展名决定（`.png/.jpg/.webp/.psd/.tif` 等）。
 - `--cmd` / `--params` 作用于前一个命令；`run` 的输入可以是现有图片或 PSD。
 - env `PHOTOCRAFT_CLI` 可覆盖 CLI 路径（应用内 droplet 用）。
+- `mcp` / `serve` 的所有启动选项（除 `--help`）只接受一个非空值、不可重复；重复 `--automation-write-root`、bridge 侧传 root flag、模式不匹配的选项都是 exit 2，错误在 server 启动前写到 stderr。
+- headless 可用 `--gpu` / `PHOTOCRAFT_GPU=1` 开 GPU 渲染（自动回退 CPU）；bridge 模式拒绝显式 `--gpu` / `--no-gpu`。不给 `--bridge` 时 `PHOTOCRAFT_CONTROL_PORT` 决定 bridge 端口。
 
 ## FilmCraft CLI
 
@@ -118,6 +122,7 @@ filmcraft-cli mcp --bridge 127.0.0.1:9876
 ```
 
 - `--save` 写回 `--project`；`--save-as path` 写别处。
+- 导出结果带 `warnings`：In/Out 只覆盖一帧且设有标记时建议 `range:"entire"`（CLI 会在 stderr 提示 `--range entire`），**不改变退出码**；`filmcraft-cli export` 会打印图像序列的第一张与最后一张路径。
 - 无窗口脚本：`filmcraft-cli run script.jsonl`（每行 `{"id":"…","params":{…}}`）。
 - `markers.exportCsv {path}`：全部序列标记转 UTF-8 CSV（CRLF、表头；公式字符前加 `'`）；不改动项目、脏标记、undo。
 

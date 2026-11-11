@@ -81,21 +81,23 @@ python3 skills/artcraft-cli/scripts/craft_ctl.py --app light --port 7980 \
 3. **静态参考带快照日期**。每份 references 顶部都标注快照时间，来源和刷新方法见 `references/upstream-sources.md`。
 4. **坑位清单只收实测过的**，每条注明适用应用与触发条件。
 
-已知的一处版本漂移：上游 `main` 文档说 FilmCraft 控制通道**要求** `FILMCRAFT_CONTROL_TOKEN`（凭据放每个请求的顶层 `token` 字段），但实测**已发布的 0.9.0 二进制并不强制**——无 token、错 token 都正常返回。文档领先于二进制是常态，所以本项目的原则是：**运行时发现优先，静态文档只作导航**。详见 `references/upstream-sources.md` 的快照历史与 `references/known-pitfalls.md`。
+已知的版本漂移：上游 `main` 文档说 FilmCraft 控制通道**要求** `FILMCRAFT_CONTROL_TOKEN`（凭据放每个请求的顶层 `token` 字段），但实测**已发布的 0.9.0 二进制并不强制**——无 token、错 token 都正常返回。另一处是 PhotoCraft 的认证：上游新增了 `auth.challenge` 挑战握手（官方 bridge 用，token 不上线），脚本侧的 `auth {token}` 首帧仍被接受，本 skill 的 `craft_ctl.py` 用的就是后者。文档领先于二进制是常态，所以本项目的原则是：**运行时发现优先，静态文档只作导航**。详见 `references/upstream-sources.md` 的快照历史与 `references/known-pitfalls.md`。
 
 ## 刷新参考文档
 
 ```sh
 mkdir -p /tmp/acdocs && cd /tmp/acdocs
+base=https://raw.githubusercontent.com/storytold
 for app in photocraft lightcraft filmcraft; do
-  for doc in control-protocol agents mcp; do
-    curl -sS -m 25 -o "$app-$doc.md" \
-      "https://raw.githubusercontent.com/storytold/$app/main/docs/$doc.md"
-  done
+  curl -fsSL -m 30 -o "$app-control-protocol.md" "$base/$app/main/docs/control-protocol.md"
 done
+curl -fsSL -m 30 -o filmcraft-agents.md "$base/filmcraft/main/docs/agents.md"
+curl -fsSL -m 30 -o lightcraft-mcp.md  "$base/lightcraft/main/docs/mcp.md"
+curl -fsSL -m 30 -o photocraft-mcp.md  "$base/photocraft/main/docs/mcp.md"
+shasum -a 256 *.md
 ```
 
-刷完核对三件事：认证方式、方法表增删、各 references 顶部的快照日期。
+只拉实际存在的 6 份：`lightcraft` / `photocraft` 有 `control-protocol.md` + `mcp.md`，`filmcraft` 有 `control-protocol.md` + `agents.md`。刷完核对三件事：认证方式、方法表与工具/root 语义增删、各 references 顶部的快照日期；细节与本次校验值见 `skills/artcraft-cli/references/upstream-sources.md`。
 
 ## 授权
 

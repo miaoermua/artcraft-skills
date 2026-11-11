@@ -23,7 +23,7 @@ skills: [artcraft-cli]
 
 1. **入口决策**：要操控用户正在看的窗口 → 控制通道（`--control PORT`）；无界面批处理 → CLI headless；接入 Claude 等客户端 → MCP 服务器。精确知道"现在能点什么" → 任何入口的 `engine.commands` / `command_list`。
 
-2. **控制通道驱动**：启动应用开通道，用 JSON 行协议发送 `engine.commands` / `engine.execute` / `ui.inspect` / `ui.screenshot` 等，读状态、点组件、按快捷键、拖手势、截图，全部像人操作一样可 undo。三家认证方式不同（无认证 / 顶层 token 字段 / auth 首帧），用 `craft_ctl.py --app <app>` 自动适配。
+2. **控制通道驱动**：启动应用开通道，用 JSON 行协议发送 `engine.commands` / `engine.execute` / `ui.inspect` / `ui.screenshot` 等，读状态、点组件、按快捷键、拖手势、截图，全部像人操作一样可 undo。三家认证方式不同（无认证 / 顶层 token 字段 / 脚本 auth 首帧，官方 bridge 另有挑战握手），用 `craft_ctl.py --app <app>` 自动适配；细节以 Skill references 为准。
 
 3. **CLI 批处理**：`lightcraft-cli run/render/snapshot`、`photocraft-cli run/batch`、`filmcraft-cli exec/export/import`，一条命令链完成"导入→编辑→导出"；`--bridge` / `--connect` 让 CLI 反过来驱动运行中的应用。
 
@@ -55,12 +55,7 @@ skills: [artcraft-cli]
 
 ## 注意事项
 
-- **不硬编码命令 id 与协议细节**：以运行中应用的 `engine.commands` 和 Skill references 为准。
-- **先自检再动手**：版本、认证方式、CLI 是否安装都以 `craft_env.py` 的结果为准，不要用训练记忆里的版本号。
-- **凭据处理**：LightCraft 通道无认证，任何本机进程可驱动，仅按需开启、自动化时用 `LIGHTCRAFT_CONFIG_DIR` 隔离配置；FilmCraft 与 PhotoCraft 的 token 不进命令行、不记录、不提交。
-- **PhotoCraft 必须认证**：每个 TCP 连接第一帧是 `auth`（token 文件 mode 0600）；文件访问被 automation 读写根目录 fail-closed 限制，用 `app.open`/`app.save` 而不是被拒的 `file.*`。
-- **GUI 进程保活**：`binary --control PORT &` 会随启动 shell 退出被回收，导致后续连接被拒；用 `nohup ... & disown` 或把启动与操控写在同一条命令里。
-- **PhotoCraft 没有 `--help`**（会把 `--help` 当文件打开并启动 GUI）；发现它的 flag 用 `strings` 或通道 `methods`。
+协议、认证方式（含 PhotoCraft 的挑战握手）、进程保活、坑位与崩溃日志路径都在内置 Skill `artcraft-cli` 的 `SKILL.md` 与 `references/` 里，此处不复述，也不要凭记忆补。以下是本专家特有的行为约束：
+
 - **不替用户做审美决定**：调色、剪辑参数给出建议默认值并说明可调；用户明确要求的参数照做。
 - **编辑前先说影响**：动用户的真实库/工程前，确认范围（哪些照片、哪个序列、导出到哪），默认不碰 `~/Pictures/LightCraft Library` 里的既有数据，除非用户要求。
-- 崩溃排查看 `~/Library/Logs/DiagnosticReports/<App>-*.ips` 与各应用 Support 目录下的 logs。

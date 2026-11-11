@@ -26,10 +26,10 @@ ArtCraft 套件（github.com/storytold）的每个桌面应用都把 UI 里能�
 ## 四条铁律（先记住这四条，再看别的）
 
 1. **运行时发现优先**。本 skill 里的参考文档是某个版本时点的快照，只用来导航和兜底；**事实以运行中实例为准**：`engine.commands`（命令注册表）、`methods`（方法表）、CLI 的 `--help` / `commands` / `controls`。**禁止凭记忆写命令 id**——各家各版本注册表都不一样。
-2. **认证三家不同，且会变**。动手前先跑 `scripts/craft_env.py` 看本机的 `auth` 字段，别照抄任何博客里的端口命令。已知的三态：
+2. **认证三家不同，且会变**。动手前先跑 `scripts/craft_env.py` 看本机的 `auth` 字段，别照抄任何博客里的端口命令。当前已知的几种：
    - LightCraft：通道**无认证**（任何本机进程都能驱动，用完即关）
    - FilmCraft：凭据放在**每个请求的顶层 `token` 字段**（较新版本强制；已发布的 0.9.0 实测并不强制）
-   - PhotoCraft：每个连接**首帧必须是 `auth`**；文件访问被 automation 读写根目录 fail-closed 限制
+   - PhotoCraft：脚本走**首帧 `auth {token}`**；官方 bridge 走 `auth.challenge` 挑战握手（token 不上线）。两者当前版本都接受，文件访问被 automation 读写根目录 fail-closed 限制
    `scripts/craft_ctl.py --app <light|film|photo>` 会自动套用对应方式；缺凭据时它不擅自失败，而是交给服务端判定并把错误原样读出来。
 3. **凭据不进命令行、不进日志、不进仓库**。用 token 文件（Unix mode 0600）或环境变量；不要在共享机器上把 token 明文传给进程。
 4. **编辑前先说影响**。动用户的真实图库/工程前，讲清楚会改哪些东西、是否可 undo、导出到哪；不确定范围就问。
@@ -119,7 +119,9 @@ filmcraft-cli --bridge 127.0.0.1:9876 exec window.workspace.color   # 反控运�
 claude mcp add lightcraft     -- lightcraft-cli mcp ~/Pictures/shoot
 claude mcp add lightcraft-app -- lightcraft-cli mcp --connect 127.0.0.1:7980
 claude mcp add filmcraft      -- filmcraft-cli mcp --bridge 127.0.0.1:9876
-claude mcp add photocraft     -- photocraft-cli mcp --bridge 127.0.0.1:7878 --control-token-file /path/token
+claude mcp add photocraft     -- photocraft-cli mcp \
+      --automation-read-root /work/project --automation-write-root /work/project
+claude mcp add photocraft-app -- photocraft-cli mcp --bridge 127.0.0.1:7878 --control-token-file /path/token
 ```
 
 headless（进程内引擎，无窗口）与 bridge（驱动已启动的应用）两种模式，凭据要求见 `references/mcp-servers.md`。
@@ -143,23 +145,24 @@ headless（进程内引擎，无窗口）与 bridge（驱动已启动的应用�
 
 - 所有通道只监听 `127.0.0.1`，协议不加密——**不要 tunnel 或代理到不可信主机**。loopback 只挡远程，挡不住同机其他进程。
 - LightCraft 通道无认证：按需开启，用 `LIGHTCRAFT_CONFIG_DIR` 隔离配置做自动化，不用时关掉。
-- PhotoCraft 文件系统 fail-closed：自动化读写限制在 `--automation-read-root` / `--automation-write-root` 之内，未授权即拒绝；`file.open` / `file.save` 被通道拒绝，改用 `app.open` / `app.save`。
+- PhotoCraft 文件系统 fail-closed：自动化读写限制在 `--automation-read-root` / `--automation-write-root` 之内，未授权即拒绝；`file.open` / `file.save` 被通道拒绝，改用 `app.open` / `app.save`。read root 可重复、write root 只能一个且不可与 bridge 混配；所有 root 必须是已存在的绝对目录。
+- PhotoCraft 挑战握手：官方 bridge 用 `auth.challenge`，token 不上线；本 skill 的 `craft_ctl.py` 仍用 `frame`（首帧 token），上游继续支持。老版本应用不认挑战握手，升级时 CLI 与应用要一起换。
 - FilmCraft 的 `FILMCRAFT_CONTROL_TOKEN` 等同于全部控制权限：保密、不要进命令行历史或 MCP 配置。
 - 默认不碰用户既有数据（例如 LightCraft 的 `~/Pictures/LightCraft Library`），除非用户明确要求。
 
 ## 出问题先查这里
 
-`references/known-pitfalls.md` 收录了实测踩过的坑（连接被拒、无帧超时、PhotoCraft 没有 `--help`、导出原子保存被系统策略拦截、图层原点偏移、`quad` 相对坐标等）。**先查表，别重复试同一个错命令。**
+`references/known-pitfalls.md` 收录了实测踩过的坑（连接被拒、无帧超时、PhotoCraft 没有 `--help`、导出原子保存被系统策略拦截、图层原点偏移、`quad` 相对坐标等），另有一节来自上游文档、尚未本机实测的坑位并标注了来源。**先查表，别重复试同一个错命令。**
 
 ## 参考文档索引
 
 | 文件 | 内容 |
 |---|---|
 | `references/app-matrix.md` | 三应用差异速查（启动 flag、凭据、沙箱、状态方法、CLI/MCP 入口）——**先看这个** |
-| `references/control-protocols.md` | 控制通道协议：通用机制 + 各家方法表 + 认证三态 |
+| `references/control-protocols.md` | 控制通道协议：通用机制 + 各家方法表 + 认证四态 |
 | `references/cli-reference.md` | 三个 CLI 的获取、子命令、参数语义、退出码 |
 | `references/mcp-servers.md` | MCP 服务器工具清单、两种模式、接入方式 |
-| `references/known-pitfalls.md` | 实测坑位与排障路径 |
-| `references/upstream-sources.md` | 上游文档地址、快照日期、**怎么刷新**这份参考 |
+| `references/known-pitfalls.md` | 实测坑位与排障路径 + 上游文档新增坑位（标注来源，未实测的会写明） |
+| `references/upstream-sources.md` | 上游文档地址、快照日期与校验值、**怎么刷新**这份参考 |
 | `scripts/craft_ctl.py` | 控制通道客户端（三家认证差异已内置） |
 | `scripts/craft_env.py` | 环境自检：应用、版本、CLI、通道、凭据 |
